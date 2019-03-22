@@ -226,6 +226,7 @@ class CustomDataset(Dataset):
             img_shape=img_shape,
             pad_shape=pad_shape,
             scale_factor=scale_factor,
+            imname=img_info['filename'],
             flip=flip)
 
         data = dict(
@@ -264,6 +265,7 @@ class CustomDataset(Dataset):
                 img_shape=img_shape,
                 pad_shape=pad_shape,
                 scale_factor=scale_factor,
+                imname=img_info['filename'],
                 flip=flip)
             if proposal is not None:
                 if proposal.shape[1] == 5:

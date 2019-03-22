@@ -14,11 +14,14 @@ from torch.utils.data import Dataset
 from .coco_utils import results2json, fast_eval_recall
 from .mean_ap import eval_map
 from mmdet import datasets
+from mmdet.core.evaluation.icdar_evaluation import icdar_eval
+import pycocotools.mask as maskUtils
+import cv2
 
 
 class DistEvalHook(Hook):
 
-    def __init__(self, dataset, interval=1):
+    def __init__(self, dataset, interval=1, cfg=None):
         if isinstance(dataset, Dataset):
             self.dataset = dataset
         elif isinstance(dataset, dict):
@@ -30,6 +33,7 @@ class DistEvalHook(Hook):
                     type(dataset)))
         self.interval = interval
         self.lock_dir = None
+        self.cfg = cfg
 
     def _barrier(self, rank, world_size):
         """Due to some issues with `torch.distributed.barrier()`, we have to
@@ -183,3 +187,91 @@ class CocoDistEvalmAPHook(DistEvalHook):
             runner.log_buffer.output[field] = cocoEval.stats[0]
         runner.log_buffer.ready = True
         os.remove(tmp_file)
+
+
+best_hmean = 0
+class IcdarDistEvalF1Hook(DistEvalHook):
+    def evaluate(self, runner, results):
+        #1 get result file
+        for idx in range(len(self.dataset)):
+            img_id = self.dataset.img_ids[idx]
+            bbox_result, segm_result = results[idx]
+
+            bboxes = np.vstack(bbox_result)
+            if segm_result is not None:
+                pt_dir = self.cfg.work_dir + '/pt/'
+                im_name = self.dataset.img_infos[idx]['filename']
+                if not os.path.exists(pt_dir):
+                    os.makedirs(pt_dir)
+                img_index = im_name.split('_')[1]
+                img_index = img_index.split('.')[0]
+                pt_file = open(pt_dir + 'res_img_' + img_index + '.txt', 'w')
+
+                segms = mmcv.concat_list(segm_result)
+
+                score_thr = self.cfg.test_cfg.rcnn.score_thr
+                inds = np.where(bboxes[:, -1] > score_thr)[0]
+
+                for i in inds:
+                    mask_c = maskUtils.decode(segms[i])
+                    contour, hier = cv2.findContours(
+                        mask_c.copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+
+                    for c in contour:
+                        c = c.reshape((-1,2))
+                        rotRect = cv2.minAreaRect(c)
+                        minRect = np.int0(cv2.boxPoints(rotRect))
+                        
+                        px = minRect[:,0]
+                        py = minRect[:,1]
+
+                        line = str(px[0]) + ',' + str(py[0]) + ',' + str(px[1]) + ',' + str(py[1]) + ',' + \
+                                str(px[2]) + ',' + str(py[2]) + ',' + str(px[3]) + ',' + str(py[3]) + '\r\n'
+                        pt_file.write(line)
+                pt_file.close()
+        
+        # get zip file
+        import zipfile
+        pt_zip_dir = os.path.join(self.cfg.work_dir, 'pt.zip')
+        output_pt_dir = os.path.join(self.cfg.work_dir, 'pt/')
+        z = zipfile.ZipFile(pt_zip_dir, 'w', zipfile.ZIP_DEFLATED)
+
+        for dirpath, dirnames, filenames in os.walk(output_pt_dir):
+            for filename in filenames:
+                z.write(os.path.join(dirpath, filename), filename)
+        z.close()
+
+        #3 use icdar eval
+        gt_zip_dir = './work_dirs/gt.zip'
+        param_dict = dict(
+            # gt zip file path
+            g = gt_zip_dir,
+            # prediction zip file path
+            s = pt_zip_dir,
+        )
+        result_dict = icdar_eval(param_dict)
+        runner.log_buffer.output['P'] = result_dict['precision']
+        runner.log_buffer.output['R'] = result_dict['recall']
+        runner.log_buffer.output['F1'] = result_dict['hmean']
+        runner.log_buffer.ready = True
+
+        global best_hmean
+        if result_dict['hmean'] > 0.8 and result_dict['hmean'] > best_hmean:
+            # delete
+            if os.path.exists(self.cfg.work_dir + '/model_best'):
+                import shutil
+                shutil.rmtree(self.cfg.work_dir + '/model_best')
+            # save model 
+            runner.save_checkpoint(self.cfg.work_dir + '/model_best', save_optimizer=True)
+            best_hmean = result_dict['hmean']
+
+        print(result_dict)
+        for i in range(6):
+            print('')
+        
+        
+
+
+
+
+
