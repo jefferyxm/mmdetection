@@ -68,6 +68,49 @@ def delta2bbox(rois,
     return bboxes
 
 
+def wh_delta2bbox(anchor_points, shape_wh, deltas, 
+                    means=[0, 0, 0, 0], stds=[1.0, 1.0, 1.0, 1.0],
+                    max_shape = None, norm=None, wh_ratio_clip=16 / 1000):
+
+    means = deltas.new_tensor(means).repeat(1, deltas.size(1) // 4)
+    stds = deltas.new_tensor(stds).repeat(1, deltas.size(1) // 4)
+    denorm_deltas = deltas * stds + means
+    dx = denorm_deltas[:, 0::4]
+    dy = denorm_deltas[:, 1::4]
+    dw = denorm_deltas[:, 2::4]
+    dh = denorm_deltas[:, 3::4]
+    max_ratio = np.abs(np.log(wh_ratio_clip))
+    dw = dw.clamp(min=-max_ratio, max=max_ratio)
+    dh = dh.clamp(min=-max_ratio, max=max_ratio)
+
+    px = (anchor_points[:, 0]).unsqueeze(1).expand_as(dx)
+    py = (anchor_points[:, 1]).unsqueeze(1).expand_as(dy)
+    pw = (shape_wh[:, 0]).unsqueeze(1).expand_as(dw)
+    ph = (shape_wh[:, 1]).unsqueeze(1).expand_as(dh)
+    pw = pw.clamp(min=-max_ratio, max=max_ratio)
+    ph = ph.clamp(min=-max_ratio, max=max_ratio)
+    pw = norm * pw.exp()
+    ph = norm * ph.exp()
+
+    gw = pw * dw.exp()
+    gh = ph * dh.exp()
+    gx = torch.addcmul(px, 1, pw, dx)  # gx = px + pw * dx
+    gy = torch.addcmul(py, 1, ph, dy)  # gy = py + ph * dy
+
+    x1 = gx - gw * 0.5 + 0.5
+    y1 = gy - gh * 0.5 + 0.5
+    x2 = gx + gw * 0.5 - 0.5
+    y2 = gy + gh * 0.5 - 0.5
+    if max_shape is not None:
+        x1 = x1.clamp(min=0, max=max_shape[1] - 1)
+        y1 = y1.clamp(min=0, max=max_shape[0] - 1)
+        x2 = x2.clamp(min=0, max=max_shape[1] - 1)
+        y2 = y2.clamp(min=0, max=max_shape[0] - 1)
+    bboxes = torch.stack([x1, y1, x2, y2], dim=-1).view_as(deltas)
+    return bboxes
+
+
+
 def bbox_flip(bboxes, img_shape):
     """Flip bboxes horizontally.
 
