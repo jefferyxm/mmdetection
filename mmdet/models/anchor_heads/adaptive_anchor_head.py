@@ -131,7 +131,7 @@ class AdaptiveAnchorHead(nn.Module):
     def loss_single(self, cls_score, wh_pred, bbox_pred, 
                     labels, label_weights,
                     wh_targets, wh_weights,
-                    bbox_targets, bbox_weights, num_total_samples, cfg):
+                    bbox_targets, bbox_weights, num_total_samples, cfg, num_pos=0):
         # classification loss
         if self.use_sigmoid_cls:
             labels = labels.reshape(-1, self.cls_out_channels)
@@ -174,7 +174,7 @@ class AdaptiveAnchorHead(nn.Module):
             wh_targets,
             wh_weights,
             beta=cfg.smoothl1_beta,
-            avg_factor=num_total_samples)
+            avg_factor=num_pos)
         
         # regression loss
         bbox_targets = bbox_targets.reshape(-1, 4)
@@ -185,7 +185,7 @@ class AdaptiveAnchorHead(nn.Module):
             bbox_targets,
             bbox_weights,
             beta=cfg.smoothl1_beta,
-            avg_factor=num_total_samples)
+            avg_factor=num_pos)
         return loss_cls, loss_wh, loss_reg
 
     def loss(self,
@@ -239,8 +239,10 @@ class AdaptiveAnchorHead(nn.Module):
             bbox_targets_list,
             bbox_weights_list,
             num_total_samples=num_total_samples,
-            cfg=cfg)
-        return dict(loss_cls=losses_cls, losses_wh=losses_wh, loss_reg=losses_reg)
+            cfg=cfg,
+            num_pos = num_total_pos
+            )
+        return dict(loss_cls=losses_cls, loss_wh=losses_wh, loss_reg=losses_reg)
 
 
 
@@ -277,33 +279,26 @@ class AdaptiveAnchorHead(nn.Module):
                 # show label in image
                 import matplotlib.pyplot as plt
                 import cv2
-
                 img_root = 'data/icdar2015/train/'
-
                 score_map = cls_score_list[0]
                 shape_map = shape_wh_list[0]
+                target_map = bbox_pred_list[0]
                 score_map = torch.Tensor.cpu(score_map)
                 shape_map = torch.Tensor.cpu(shape_map)
-
-
-                
+                target_map = torch.Tensor.cpu(target_map)
+                print(target_map.shape)
                 # input()
-
                 plt.subplot(1,2,1)
-                plt.imshow(score_map[0], cmap=plt.cm.hot)
-
-                
+                plt.imshow(shape_map[1], cmap=plt.cm.hot)
                 im = cv2.imread(img_root + img_metas[0]['imname'])
                 im = cv2.resize(im, (0,0), fx=img_metas[0]['scale_factor'], fy=img_metas[0]['scale_factor'])
-                
                 im_plt = im[:,:,(2,1,0)]
                 plt.subplot(1,2,2)
                 plt.imshow(im_plt)
-
-                # for pps in proposals:
-                #     plt.gca().add_patch(plt.Rectangle((pps[0], pps[1]), pps[2]-pps[0], pps[3]-pps[1] ,fill=False, edgecolor='g', linewidth=1))
+                proposals = proposals[1:10,:]
+                for pps in proposals:
+                    plt.gca().add_patch(plt.Rectangle((pps[0], pps[1]), pps[2]-pps[0], pps[3]-pps[1] ,fill=False, edgecolor='g', linewidth=1))
                 plt.show()
-
 
         return result_list
 
@@ -315,4 +310,5 @@ class AdaptiveAnchorHead(nn.Module):
                           scale_factor,
                           cfg,
                           rescale=False):
+        print(" Not implement error")
         return None

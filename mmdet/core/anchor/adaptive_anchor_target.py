@@ -41,11 +41,7 @@ def adaptive_anchor_target(anchor_points_list,
     assert len(anchor_points_list) == len(valid_flag_list) == num_imgs
     # anchor number of multi levels
     num_level_ap = [ap.size(0) for ap in anchor_points_list[0]]
-
     norm_list = np.array(stride_list) * 8.0
-    # 
-    
-    example_level_fraction=[0.7, 0.25, 0.1, 0.1, 0.1]
     num_total_pos = 0
     num_total_neg = 0
 
@@ -54,27 +50,24 @@ def adaptive_anchor_target(anchor_points_list,
     for im_i in range(num_imgs):
         
         labels, shape_whs, box_targets = [], [], []
-        labels_w, shape_whs_w, box_targets_w = [], [], []
+        bg_list = []
         gt_rois = np.array(torch.Tensor.cpu(gt_bboxes_list[im_i]))
 
         for i in range(len(num_level_ap)):
             this_level_ap = np.array(torch.Tensor.cpu(anchor_points_list[im_i][i]))
-
             this_level_label = np.zeros((this_level_ap.shape[0], ), dtype=np.float32)
             this_level_label_weight = np.zeros((this_level_ap.shape[0], ), dtype=np.float32)
-
-            this_level_wh = np.zeros((this_level_ap.shape[0], 2), 
-                                            dtype=np.float32)
-            this_level_box_delta = np.zeros((this_level_ap.shape[0], 4),                                             dtype=np.float32)
+            this_level_wh = np.zeros((this_level_ap.shape[0], 2), dtype=np.float32)
+            this_level_box_delta = np.zeros((this_level_ap.shape[0], 4),dtype=np.float32)
             if gt_rois.shape[0] > 0:
                 norm = norm_list[i]
                 gt_areas = (gt_rois[:, 2] - gt_rois[:, 0] + 1)*(gt_rois[:, 3]-gt_rois[:, 1] + 1)/(norm*norm)
                 if i == 0:
-                    valid_gtidx = np.where(gt_areas <= 2.0)[0]
+                    valid_gtidx = np.where(gt_areas <= 1.0)[0]
                 elif i == len(num_level_ap) - 1:
-                    valid_gtidx = np.where(gt_areas >= 0.5)[0]
+                    valid_gtidx = np.where(gt_areas >= 0.25)[0]
                 else:
-                    valid_gtidx = np.where((gt_areas <= 2.0) & (gt_areas >= 0.5))[0]
+                    valid_gtidx = np.where((gt_areas <= 1.0) & (gt_areas >= 0.25))[0]
                 valid_gts = gt_rois[valid_gtidx, :]
 
                 valid_apidx = np.empty(0, dtype=np.int32)
@@ -110,7 +103,6 @@ def adaptive_anchor_target(anchor_points_list,
                     transfm_aps[:, :, idx] = tmp_aps.transpose(1,0)
                 
                 A = np.zeros((m, n), dtype = np.float32)
-                
                 A[:] = (valid_gts[:,2] - valid_gts[:, 0] + 1)*(valid_gts[:,3] - valid_gts[:, 1] + 1)
                 C = ( transfm_aps[0] - (np.tile(valid_gts[:,0], [m, 1])) ) * 0.5
                 D = ( transfm_aps[1] - (np.tile(valid_gts[:,1], [m, 1])) ) * 0.5
@@ -159,7 +151,6 @@ def adaptive_anchor_target(anchor_points_list,
                 this_level_wh[ valid_apidx[enable_idx[0]], 1 ] = \
                             CANDHS[ WHidx[enable_idx[0], enable_idx[1]], enable_idx[0], enable_idx[1] ]/norm
                 
-
                 # compute box delta
                 gt_widths = (valid_gts[enable_idx[1], 2] - valid_gts[enable_idx[1], 0] + 1) 
                 gt_heghts = (valid_gts[enable_idx[1], 3] - valid_gts[enable_idx[1], 1] + 1) 
@@ -209,52 +200,82 @@ def adaptive_anchor_target(anchor_points_list,
 
                     plt.show()
             
-            # subsampling positive or negetive examples
-            fg_idx = np.where(this_level_label==1)[0]
-            fg_num_this_level = len(fg_idx)
-            example_this_level = int(cfg.sampler.num * example_level_fraction[i])
-            fg_example_this_level = int(example_this_level * cfg.sampler.pos_fraction)
-            if fg_num_this_level > fg_example_this_level:
-                # subsampling positive
-                disable_inds = npr.choice(fg_idx, size=(fg_num_this_level - fg_example_this_level), replace=False)
-                # this_level_label[disable_inds] = -1
-                this_level_label_weight[disable_inds] = 0
-            fg_idx = np.where(this_level_label == 1)[0]
-            fg_num_this_level = len(fg_idx)
+            # set the nearest position to be positive 
+            #  not implement
 
-            # add nagative samples
-            bg_num_this_level = example_this_level - fg_num_this_level
+            # save labels into list
+            labels.append(this_level_label)
+            shape_whs.append(this_level_wh)
+            box_targets.append(this_level_box_delta)
+
             bg_map = np.zeros((this_level_ap.shape[0],), dtype=np.int32)
             bg_map[valid_apidx] = 1
-            bg_idx = np.where(bg_map==0)[0]
-            # this_level_label[bg_idx] = -1
-            this_level_label_weight[bg_idx] = 0
-            if len(bg_idx) > bg_num_this_level and bg_num_this_level > 0:
-                # print(bg_num_this_level)
-                enable_inds = bg_idx[npr.randint(len(bg_idx), size=bg_num_this_level)]
-                # this_level_label[enable_inds] = 0
-                this_level_label_weight[enable_inds] = 1
-            
-
-            # this_level_label_weight = np.zeros((this_level_ap.shape[0], 1), dtype=np.float32)
-            # this_level_label_weight[this_level_label == 1, :] = 1.0
-
-            this_level_wh_weight = np.zeros((this_level_ap.shape[0], 2), dtype=np.float32)
-            this_level_wh_weight[this_level_label == 1, :] = (1.0, 1.0)
-            
-            this_level_box_weight = np.zeros((this_level_ap.shape[0], 4), dtype=np.float32)
-            this_level_box_weight[this_level_label == 1, :] = (1.0, 1.0, 1.0, 1.0)
-
-            labels.append(torch.from_numpy(this_level_label).to('cuda'))
-            shape_whs.append(torch.from_numpy(this_level_wh).to('cuda'))
-            box_targets.append(torch.from_numpy(this_level_box_delta).to('cuda'))
-
-            labels_w.append(torch.from_numpy(this_level_label_weight).to('cuda'))
-            shape_whs_w.append(torch.from_numpy(this_level_wh_weight).to('cuda'))
-            box_targets_w.append(torch.from_numpy(this_level_box_weight).to('cuda'))
+            bg_list.append(bg_map)
         # lvl end
-        num_total_pos += fg_num_this_level
-        num_total_neg += bg_num_this_level
+
+        # sampling positive and negative
+        num_total = cfg.sampler.num
+        pos_fraction = cfg.sampler.pos_fraction
+
+        lvl_counts = [x.shape[0] for x in labels]
+        slice_position = [sum(lvl_counts[:i+1]) for i in range(len(lvl_counts))]
+        slice_position.insert(0,0)
+
+        cat_labels = np.concatenate(tuple(labels), axis=0)       
+        cat_shape_whs = np.concatenate(tuple(shape_whs), axis=0)
+        cat_box_targets = np.concatenate(tuple(box_targets), axis=0)
+        cat_bg = np.concatenate(tuple(bg_list), axis=0)
+
+        valid_flag = tuple([valid_flag_list[im_i][l] for l in range(len(num_level_ap))])
+        cat_valid_flag = torch.cat(valid_flag)
+        cat_valid_flag = np.array(torch.Tensor.cpu(cat_valid_flag))
+
+        assert cat_labels.shape[0] == cat_valid_flag.shape[0]
+
+        pos_idx = np.where((cat_labels==1) & (cat_valid_flag == 1))[0]
+        # sub sampling positive if too much
+        if len(pos_idx) > int(num_total * pos_fraction):
+            disable_inds = npr.choice(pos_idx, size=(len(pos_idx) - int(num_total * pos_fraction)), replace=False)
+            cat_labels[disable_inds] = 0
+            pos_idx = np.where((cat_labels==1) & (cat_valid_flag == 1))[0]
+            # recover data
+            cat_labels[disable_inds] = 1
+        
+        # sub_sampling negative if too much
+        neg_idx = np.where((cat_bg==0) & (cat_valid_flag == 1))[0]
+        if len(neg_idx) > int(num_total*(1-pos_fraction)):
+            neg_idx = neg_idx[npr.randint(len(neg_idx), size=int(num_total*(1-pos_fraction)) )]
+
+        num_total_pos += len(pos_idx)
+        num_total_neg += len(neg_idx)
+        
+        # to cuda
+        cat_labels = torch.from_numpy(cat_labels).to('cuda')
+        cat_shape_whs = torch.from_numpy(cat_shape_whs).to('cuda')
+        cat_box_targets = torch.from_numpy(cat_box_targets).to('cuda')
+
+        # get weights
+        cat_labels_w = torch.zeros((cat_labels.shape[0],), dtype=torch.float32, device = 'cuda')
+        cat_shape_whs_w = torch.zeros((cat_labels.shape[0], 2), dtype=torch.float32, device = 'cuda')
+        cat_box_targets_w = torch.zeros((cat_labels.shape[0], 4), dtype=torch.float32, device = 'cuda')
+        cat_labels_w[pos_idx] = 1.0
+        cat_shape_whs_w[pos_idx, :] = torch.tensor([1.0, 1.0]).to('cuda')
+        cat_box_targets_w[pos_idx, :] = torch.tensor([1.0, 1.0, 1.0, 1.0]).to('cuda')
+
+        # recover data
+        labels, shape_whs, box_targets = [], [], []
+        labels_w, shape_whs_w, box_targets_w = [], [], []
+        for l in range(len(slice_position)-1):
+            labels.append(cat_labels[slice_position[l]:slice_position[l+1]])
+            labels_w.append(cat_labels_w[slice_position[l]:slice_position[l+1]])
+
+            shape_whs.append(cat_shape_whs[slice_position[l]:slice_position[l+1]])
+            shape_whs_w.append(cat_shape_whs_w[slice_position[l]:slice_position[l+1]])
+
+            box_targets.append(cat_box_targets[slice_position[l]:slice_position[l+1]])
+            box_targets_w.append(cat_box_targets_w[slice_position[l]:slice_position[l+1]])
+        
+        # fit shape to loss input
         if im_i == 0:
             labels_list = labels.copy()
             shape_wh_list = shape_whs.copy()
@@ -284,23 +305,40 @@ def adaptive_anchor_target(anchor_points_list,
             
             im_plt = im[:,:,(2,1,0)]
             plt.cla()
-            plt.subplot(1,2,1)
+            plt.subplot(2,2,1)
             plt.imshow(im_plt)
 
             score_map = labels_list[0]
+            shape_map = shape_wh_list[0]
+            shape_map_w = shape_wh_weights_list[0]
+
             print(score_map.shape)
             score_map = torch.Tensor.cpu(score_map)
+            shape_map =torch.Tensor.cpu(shape_map)
+            shape_map_w = torch.Tensor.cpu(shape_map_w)
+
+            print(shape_map.shape)
+
 
             feat_h, feat_w = img_metas[im_i]['pad_shape'][0]//4, img_metas[im_i]['pad_shape'][1]//4
             score_map = torch.reshape(score_map, (1, feat_h, feat_w, 1))
             score_map = score_map.permute((0,3,1,2))
 
-            plt.subplot(1,2,2)
+            shape_map = torch.reshape(shape_map, (1, feat_h, feat_w, 2))
+            shape_map = shape_map.permute((0,3,1,2))
+
+            shape_map_w = torch.reshape(shape_map_w, (1, feat_h, feat_w, 2))
+            shape_map_w = shape_map_w.permute((0,3,1,2))
+
+            plt.subplot(2,2,2)
             plt.imshow(score_map[0,0,:,:], cmap=plt.cm.hot)
-            
 
+            plt.subplot(2,2,3)
+            plt.imshow(shape_map[0,0,:,:], cmap=plt.cm.hot)
+
+            plt.subplot(2,2,4)
+            plt.imshow(shape_map_w[0,0,:,:], cmap=plt.cm.hot)
             plt.show()
-
 
     return (labels_list, label_weights_list, 
             shape_wh_list, shape_wh_weights_list,
