@@ -63,11 +63,11 @@ def adaptive_anchor_target(anchor_points_list,
                 norm = norm_list[i]
                 gt_areas = (gt_rois[:, 2] - gt_rois[:, 0] + 1)*(gt_rois[:, 3]-gt_rois[:, 1] + 1)/(norm*norm)
                 if i == 0:
-                    valid_gtidx = np.where(gt_areas <= 1.0)[0]
+                    valid_gtidx = np.where(gt_areas <= 2.0)[0]
                 elif i == len(num_level_ap) - 1:
-                    valid_gtidx = np.where(gt_areas >= 0.25)[0]
+                    valid_gtidx = np.where(gt_areas >= 0.5)[0]
                 else:
-                    valid_gtidx = np.where((gt_areas <= 1.0) & (gt_areas >= 0.25))[0]
+                    valid_gtidx = np.where((gt_areas <= 2.0) & (gt_areas >= 0.5))[0]
                 valid_gts = gt_rois[valid_gtidx, :]
 
                 valid_apidx = np.empty(0, dtype=np.int32)
@@ -243,8 +243,8 @@ def adaptive_anchor_target(anchor_points_list,
         
         # sub_sampling negative if too much
         neg_idx = np.where((cat_bg==0) & (cat_valid_flag == 1))[0]
-        if len(neg_idx) > int(num_total*(1-pos_fraction)):
-            neg_idx = neg_idx[npr.randint(len(neg_idx), size=int(num_total*(1-pos_fraction)) )]
+        if len(neg_idx) > int(num_total - len(pos_idx)):
+            neg_idx = neg_idx[npr.randint(len(neg_idx), size=int(num_total - len(pos_idx)) )]
 
         num_total_pos += len(pos_idx)
         num_total_neg += len(neg_idx)
@@ -258,9 +258,11 @@ def adaptive_anchor_target(anchor_points_list,
         cat_labels_w = torch.zeros((cat_labels.shape[0],), dtype=torch.float32, device = 'cuda')
         cat_shape_whs_w = torch.zeros((cat_labels.shape[0], 2), dtype=torch.float32, device = 'cuda')
         cat_box_targets_w = torch.zeros((cat_labels.shape[0], 4), dtype=torch.float32, device = 'cuda')
-        cat_labels_w[pos_idx] = 1.0
-        cat_shape_whs_w[pos_idx, :] = torch.tensor([1.0, 1.0]).to('cuda')
-        cat_box_targets_w[pos_idx, :] = torch.tensor([1.0, 1.0, 1.0, 1.0]).to('cuda')
+        
+        weight_position = np.concatenate((pos_idx, neg_idx))
+        cat_labels_w[weight_position] = 1.0
+        cat_shape_whs_w[pos_idx, :] = 1.0
+        cat_box_targets_w[pos_idx, :] = 1.0
 
         # recover data
         labels, shape_whs, box_targets = [], [], []
@@ -309,16 +311,14 @@ def adaptive_anchor_target(anchor_points_list,
             plt.imshow(im_plt)
 
             score_map = labels_list[0]
+            score_map_w = label_weights_list[0]
             shape_map = shape_wh_list[0]
             shape_map_w = shape_wh_weights_list[0]
 
-            print(score_map.shape)
             score_map = torch.Tensor.cpu(score_map)
             shape_map =torch.Tensor.cpu(shape_map)
             shape_map_w = torch.Tensor.cpu(shape_map_w)
-
-            print(shape_map.shape)
-
+            score_map_w = torch.Tensor.cpu(score_map_w)
 
             feat_h, feat_w = img_metas[im_i]['pad_shape'][0]//4, img_metas[im_i]['pad_shape'][1]//4
             score_map = torch.reshape(score_map, (1, feat_h, feat_w, 1))
@@ -327,8 +327,8 @@ def adaptive_anchor_target(anchor_points_list,
             shape_map = torch.reshape(shape_map, (1, feat_h, feat_w, 2))
             shape_map = shape_map.permute((0,3,1,2))
 
-            shape_map_w = torch.reshape(shape_map_w, (1, feat_h, feat_w, 2))
-            shape_map_w = shape_map_w.permute((0,3,1,2))
+            score_map_w = torch.reshape(score_map_w, (1, feat_h, feat_w, 1))
+            score_map_w = score_map_w.permute((0,3,1,2))
 
             plt.subplot(2,2,2)
             plt.imshow(score_map[0,0,:,:], cmap=plt.cm.hot)
@@ -337,7 +337,7 @@ def adaptive_anchor_target(anchor_points_list,
             plt.imshow(shape_map[0,0,:,:], cmap=plt.cm.hot)
 
             plt.subplot(2,2,4)
-            plt.imshow(shape_map_w[0,0,:,:], cmap=plt.cm.hot)
+            plt.imshow(score_map_w[0,0,:,:], cmap=plt.cm.hot)
             plt.show()
 
     return (labels_list, label_weights_list, 
