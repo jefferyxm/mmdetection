@@ -7,6 +7,7 @@ from .. import builder
 from ..registry import DETECTORS
 from mmdet.core import bbox2roi, bbox2result, build_assigner, build_sampler
 from mmdet.models.necks import ARPNDeformFeature
+from mmdet.models.necks import AddAttention
 
 
 @DETECTORS.register_module
@@ -34,6 +35,10 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
 
         if rpn_head is not None:
             self.rpn_head = builder.build_head(rpn_head)
+
+        self.with_attention = 1
+        if self.with_attention:
+            self.add_attention = AddAttention(neck.out_channels)
 
         self.with_deform_adjust = 1
         if self.with_deform_adjust:
@@ -113,6 +118,9 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
             proposal_list = self.rpn_head.get_bboxes(*proposal_inputs)
         else:
             proposal_list = proposals
+        
+        if self.with_attention:
+            x = self.add_attention(x)
 
         if self.with_deform_adjust:
             x = self.deform_adjust(x, rpn_outs[1])
@@ -221,3 +229,4 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
             return bbox_results, segm_results
         else:
             return bbox_results
+
