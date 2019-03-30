@@ -8,7 +8,7 @@ class RPNTestMixin(object):
         rpn_outs = self.rpn_head(x)
         proposal_inputs = rpn_outs + (img_meta, rpn_test_cfg)
         proposal_list = self.rpn_head.get_bboxes(*proposal_inputs)
-        return proposal_list
+        return proposal_list, rpn_outs[1]
 
     def aug_test_rpn(self, feats, img_metas, rpn_test_cfg):
         imgs_per_gpu = len(img_metas[0])

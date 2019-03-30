@@ -6,6 +6,7 @@ from .test_mixins import RPNTestMixin, BBoxTestMixin, MaskTestMixin
 from .. import builder
 from ..registry import DETECTORS
 from mmdet.core import bbox2roi, bbox2result, build_assigner, build_sampler
+from mmdet.models.necks import ARPNDeformFeature
 
 
 @DETECTORS.register_module
@@ -33,6 +34,14 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
 
         if rpn_head is not None:
             self.rpn_head = builder.build_head(rpn_head)
+
+        self.with_deform_adjust = 1
+        if self.with_deform_adjust:
+            self.deform_adjust = ARPNDeformFeature(
+                neck.out_channels,
+                neck.out_channels,
+                neck.num_outs
+            )
 
         if bbox_head is not None:
             self.bbox_roi_extractor = builder.build_roi_extractor(
@@ -70,6 +79,8 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
         if self.with_mask:
             self.mask_roi_extractor.init_weights()
             self.mask_head.init_weights()
+        if self.with_deform_adjust:
+            self.deform_adjust.init_weights()
 
     def extract_feat(self, img):
         x = self.backbone(img)
@@ -102,6 +113,9 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
             proposal_list = self.rpn_head.get_bboxes(*proposal_inputs)
         else:
             proposal_list = proposals
+
+        if self.with_deform_adjust:
+            x = self.deform_adjust(x, rpn_outs[1])
 
         # assign gts and sample proposals
         if self.with_bbox or self.with_mask:
@@ -161,8 +175,11 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
 
         x = self.extract_feat(img)
 
-        proposal_list = self.simple_test_rpn(
+        proposal_list, shape = self.simple_test_rpn(
             x, img_meta, self.test_cfg.rpn) if proposals is None else proposals
+
+        if self.with_deform_adjust:
+            x = self.deform_adjust(x, shape)
 
         det_bboxes, det_labels = self.simple_test_bboxes(
             x, img_meta, proposal_list, self.test_cfg.rcnn, rescale=rescale)
