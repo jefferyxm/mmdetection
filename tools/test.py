@@ -99,6 +99,39 @@ def main():
             _data_func,
             range(args.gpus),
             workers_per_gpu=args.proc_per_gpu)
+    
+    # run evaluation
+    import zipfile
+    from mmdet.core.evaluation.icdar_evaluation import icdar_eval
+    import os
+
+    pt_zip_dir = os.path.join('../output', 'pt.zip')
+    output_pt_dir = os.path.join('../output', 'pt/')
+    z = zipfile.ZipFile(pt_zip_dir, 'w', zipfile.ZIP_DEFLATED)
+
+    for dirpath, dirnames, filenames in os.walk(output_pt_dir):
+        for filename in filenames:
+            z.write(os.path.join(dirpath, filename), filename)
+    z.close()
+
+    #3 use icdar eval
+    gt_zip_dir = './work_dirs/gt.zip'
+    param_dict = dict(
+        # gt zip file path
+        g = gt_zip_dir,
+        # prediction zip file path
+        s = pt_zip_dir,
+    )
+    result_dict = icdar_eval(param_dict)
+    # runner.log_buffer.output['P'] = result_dict['precision']
+    # runner.log_buffer.output['R'] = result_dict['recall']
+    # runner.log_buffer.output['F1'] = result_dict['hmean']
+    # runner.log_buffer.ready = True
+    
+    print(result_dict)
+    for i in range(6):
+        print('')
+
 
     if args.out:
         print('writing results to {}'.format(args.out))

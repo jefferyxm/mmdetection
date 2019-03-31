@@ -118,7 +118,7 @@ class BaseDetector(nn.Module):
             gen_res_file = False
             if segm_result is not None:
                 gen_res_file = True
-                pt_dir = '../output/'
+                pt_dir = '../output/pt/'
                 im_name = img_meta['imname']
                 if not os.path.exists(pt_dir):
                     os.makedirs(pt_dir)
@@ -172,3 +172,5 @@ class BaseDetector(nn.Module):
             #     labels,
             #     class_names=class_names,
             #     score_thr=score_thr)
+        
+        
