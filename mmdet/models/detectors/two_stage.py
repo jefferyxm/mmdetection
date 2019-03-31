@@ -38,7 +38,7 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
 
         self.with_attention = 1
         if self.with_attention:
-            self.add_attention = AddAttention(neck.out_channels)
+            self.add_attention = AddAttention(neck.out_channels, neck.num_outs)
 
         self.with_deform_adjust = 1
         if self.with_deform_adjust:
@@ -103,6 +103,9 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
                       proposals=None):
         x = self.extract_feat(img)
 
+        if self.with_attention:
+            x = self.add_attention(x)
+
         losses = dict()
 
         # RPN forward and loss
@@ -118,9 +121,6 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
             proposal_list = self.rpn_head.get_bboxes(*proposal_inputs)
         else:
             proposal_list = proposals
-        
-        if self.with_attention:
-            x = self.add_attention(x)
 
         if self.with_deform_adjust:
             x = self.deform_adjust(x, rpn_outs[1])
@@ -182,6 +182,9 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
         assert self.with_bbox, "Bbox head must be implemented."
 
         x = self.extract_feat(img)
+
+        if self.with_attention:
+            x = self.add_attention(x)
 
         proposal_list, shape = self.simple_test_rpn(
             x, img_meta, self.test_cfg.rpn) if proposals is None else proposals

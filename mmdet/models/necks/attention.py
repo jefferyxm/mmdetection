@@ -24,7 +24,7 @@ class PAM_Module(Module):
         self.query_conv = Conv2d(in_channels=in_dim, out_channels=in_dim//8, kernel_size=1)
         self.key_conv = Conv2d(in_channels=in_dim, out_channels=in_dim//8, kernel_size=1)
         self.value_conv = Conv2d(in_channels=in_dim, out_channels=in_dim, kernel_size=1)
-        self.gamma = Parameter(torch.zeros(1))
+        # self.gamma = Parameter(torch.zeros(1))
 
         self.softmax = Softmax(dim=-1)
     def forward(self, x):
@@ -45,7 +45,7 @@ class PAM_Module(Module):
         out = torch.bmm(proj_value, attention.permute(0, 2, 1))
         out = out.view(m_batchsize, C, height, width)
 
-        out = self.gamma*out + x
+        # out = self.gamma*out + x
         return out
 
 

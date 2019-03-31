@@ -162,7 +162,7 @@ log_config = dict(
 total_epochs = 90
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = './work_dirs/mask_rcnn_r50_fpn_1x-arpn2'
+work_dir = './work_dirs/exp03001'
 load_from = None
 resume_from = None
 # resume_from = work_dir + '/epoch_80.pth'
