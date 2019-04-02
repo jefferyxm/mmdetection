@@ -46,7 +46,7 @@ class ImageTransform(object):
         return img, img_shape, pad_shape, scale_factor
 
 
-def bbox_flip(bboxes, img_shape):
+def bbox_flip(bboxes, polygons, img_shape):
     """Flip bboxes horizontally.
 
     Args:
@@ -58,7 +58,17 @@ def bbox_flip(bboxes, img_shape):
     flipped = bboxes.copy()
     flipped[..., 0::4] = w - bboxes[..., 2::4] - 1
     flipped[..., 2::4] = w - bboxes[..., 0::4] - 1
-    return flipped
+
+    f_polygons = polygons.copy()
+    f_polygons[..., 0::8] = w - polygons[..., 2::8] - 1
+    f_polygons[..., 1::8] = polygons[..., 3::8]
+    f_polygons[..., 2::8] = w - polygons[..., 0::8] - 1
+    f_polygons[..., 3::8] = polygons[..., 1::8]
+    f_polygons[..., 4::8] = w - polygons[..., 6::8] - 1
+    f_polygons[..., 5::8] = polygons[..., 7::8]
+    f_polygons[..., 6::8] = w - polygons[..., 4::8] - 1
+    f_polygons[..., 7::8] = polygons[..., 5::8]
+    return flipped, f_polygons
 
 
 class BboxTransform(object):
@@ -72,19 +82,29 @@ class BboxTransform(object):
     def __init__(self, max_num_gts=None):
         self.max_num_gts = max_num_gts
 
-    def __call__(self, bboxes, img_shape, scale_factor, flip=False):
+    def __call__(self, bboxes, polygons, img_shape, scale_factor, flip=False):
         gt_bboxes = bboxes * scale_factor
+        gt_polygons = polygons * scale_factor
         if flip:
-            gt_bboxes = bbox_flip(gt_bboxes, img_shape)
+            gt_bboxes, gt_polygons = bbox_flip(gt_bboxes, gt_polygons, img_shape)
+    
         gt_bboxes[:, 0::2] = np.clip(gt_bboxes[:, 0::2], 0, img_shape[1] - 1)
         gt_bboxes[:, 1::2] = np.clip(gt_bboxes[:, 1::2], 0, img_shape[0] - 1)
+
+        gt_polygons[:, 0::2] = np.clip(gt_polygons[:, 0::2], 0, img_shape[1] - 1)
+        gt_polygons[:, 1::2] = np.clip(gt_polygons[:, 1::2], 0, img_shape[0] - 1)
+
         if self.max_num_gts is None:
-            return gt_bboxes
+            return gt_bboxes, gt_polygons
         else:
             num_gts = gt_bboxes.shape[0]
             padded_bboxes = np.zeros((self.max_num_gts, 4), dtype=np.float32)
             padded_bboxes[:num_gts, :] = gt_bboxes
-            return padded_bboxes
+
+            padded_polygons = np.zeros((self.max_num_gts, 8), dtype=np.float32)
+            padded_polygons[:num_gts, :] = gt_polygons
+
+            return padded_bboxes, padded_polygons
 
 
 class MaskTransform(object):

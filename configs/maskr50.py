@@ -1,6 +1,6 @@
 # model settings
 model = dict(
-    type='MaskRCNN',
+    type='FasterRCNN',
     pretrained='modelzoo://resnet50',
     backbone=dict(
         type='ResNet',
@@ -12,44 +12,33 @@ model = dict(
     neck=dict(
         type='FPN',
         in_channels=[256, 512, 1024, 2048],
-        out_channels=256,
-        num_outs=5),
+        out_channels=64,
+        num_outs=4),
     rpn_head=dict(
         type='RPNHead',
-        in_channels=256,
-        feat_channels=256,
+        in_channels=64,
+        feat_channels=64,
         anchor_scales=[8],
         anchor_ratios=[0.5, 1.0, 2.0],
-        anchor_strides=[4, 8, 16, 32, 64],
+        anchor_strides=[4, 8, 16, 32],
         target_means=[.0, .0, .0, .0],
         target_stds=[1.0, 1.0, 1.0, 1.0],
         use_sigmoid_cls=True),
     bbox_roi_extractor=dict(
         type='SingleRoIExtractor',
         roi_layer=dict(type='RoIAlign', out_size=7, sample_num=2),
-        out_channels=256,
+        out_channels=64,
         featmap_strides=[4, 8, 16, 32]),
     bbox_head=dict(
         type='SharedFCBBoxHead',
         num_fcs=2,
-        in_channels=256,
+        in_channels=64,
         fc_out_channels=1024,
         roi_feat_size=7,
         num_classes=2,
         target_means=[0., 0., 0., 0.],
         target_stds=[0.1, 0.1, 0.2, 0.2],
-        reg_class_agnostic=False),
-    mask_roi_extractor=dict(
-        type='SingleRoIExtractor',
-        roi_layer=dict(type='RoIAlign', out_size=14, sample_num=2),
-        out_channels=256,
-        featmap_strides=[4, 8, 16, 32]),
-    mask_head=dict(
-        type='FCNMaskHead',
-        num_convs=4,
-        in_channels=256,
-        conv_out_channels=256,
-        num_classes=2))
+        reg_class_agnostic=False))
 # model training and testing settings
 train_cfg = dict(
     rpn=dict(
@@ -77,7 +66,7 @@ train_cfg = dict(
             min_pos_iou=0.5,
             ignore_iof_thr=-1),
         sampler=dict(
-            type='OHEMSampler',
+            type='RandomSampler',
             num=512,
             pos_fraction=0.25,
             neg_pos_ub=-1,
@@ -149,7 +138,7 @@ lr_config = dict(
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
     step=[60, 80])
-checkpoint_config = dict(interval=20)
+checkpoint_config = dict(interval=10)
 # yapf:disable
 log_config = dict(
     interval=50,
@@ -162,7 +151,7 @@ log_config = dict(
 total_epochs = 90
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = './work_dirs/mask_rcnn_r50_fpn_1x-ohem'
+work_dir = './work_dirs/reg_4points'
 load_from = None
 resume_from = None
 # resume_from = work_dir + '/epoch_80.pth'

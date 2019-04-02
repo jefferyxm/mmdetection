@@ -1,6 +1,6 @@
 import torch
 
-from .transforms import bbox2delta
+from .transforms import bbox2delta, polygon2delta
 from ..utils import multi_apply
 
 
@@ -74,3 +74,75 @@ def expand_target(bbox_targets, bbox_weights, labels, num_classes):
         bbox_targets_expand[i, start:end] = bbox_targets[i, :]
         bbox_weights_expand[i, start:end] = bbox_weights[i, :]
     return bbox_targets_expand, bbox_weights_expand
+
+
+
+def polygon_target(pos_bboxes_list,
+                neg_bboxes_list,
+                pos_gt_polygons_list,
+                pos_gt_labels_list,
+                cfg,
+                reg_classes=1,
+                target_means=[.0, .0, .0, .0, .0, .0, .0, .0],
+                target_stds=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+                concat=True):
+    labels, label_weights, polygon_targets, polygon_weights = multi_apply(
+        polygon_target_single,
+        pos_bboxes_list,
+        neg_bboxes_list,
+        pos_gt_polygons_list,
+        pos_gt_labels_list,
+        cfg=cfg,
+        reg_classes=reg_classes,
+        target_means=target_means,
+        target_stds=target_stds)
+
+    if concat:
+        labels = torch.cat(labels, 0)
+        label_weights = torch.cat(label_weights, 0)
+        polygon_targets = torch.cat(polygon_targets, 0)
+        polygon_weights = torch.cat(polygon_weights, 0)
+    return labels, label_weights, polygon_targets, polygon_weights
+
+def polygon_target_single(pos_bboxes,
+                       neg_bboxes,
+                       pos_gt_polygons,
+                       pos_gt_labels,
+                       cfg,
+                       reg_classes=1,
+                       target_means=[.0, .0, .0, .0],
+                       target_stds=[1.0, 1.0, 1.0, 1.0]):
+    num_pos = pos_bboxes.size(0)
+    num_neg = neg_bboxes.size(0)
+    num_samples = num_pos + num_neg
+    labels = pos_bboxes.new_zeros(num_samples, dtype=torch.long)
+    label_weights = pos_bboxes.new_zeros(num_samples)
+    polygon_targets = pos_bboxes.new_zeros(num_samples, 8)
+    polygon_weights = pos_bboxes.new_zeros(num_samples, 8)
+    if num_pos > 0:
+        labels[:num_pos] = pos_gt_labels
+        pos_weight = 1.0 if cfg.pos_weight <= 0 else cfg.pos_weight
+        label_weights[:num_pos] = pos_weight
+        pos_gt_polygons = polygon2delta(pos_bboxes, pos_gt_polygons, target_means,
+                                      target_stds)
+        polygon_targets[:num_pos, :] = pos_gt_polygons
+        polygon_weights[:num_pos, :] = 1
+    if num_neg > 0:
+        label_weights[-num_neg:] = 1.0
+    if reg_classes > 1:
+        polygon_targets, polygon_weights = expand_target(polygon_targets, polygon_weights,
+                                                   labels, reg_classes)
+
+    return labels, label_weights, polygon_targets, polygon_weights
+
+
+def expand_target(polygon_targets, polygon_weights, labels, num_classes):
+    polygon_targets_expand = polygon_targets.new_zeros((polygon_targets.size(0),
+                                                  8 * num_classes))
+    polygon_weights_expand = polygon_weights.new_zeros((polygon_weights.size(0),
+                                                  8 * num_classes))
+    for i in torch.nonzero(labels > 0).squeeze(-1):
+        start, end = labels[i] * 8, (labels[i] + 1) * 8
+        polygon_targets_expand[i, start:end] = polygon_targets[i, :]
+        polygon_weights_expand[i, start:end] = polygon_weights[i, :]
+    return polygon_targets_expand, polygon_weights_expand

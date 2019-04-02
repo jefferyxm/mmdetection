@@ -3,7 +3,7 @@ import torch
 
 class SamplingResult(object):
 
-    def __init__(self, pos_inds, neg_inds, bboxes, gt_bboxes, assign_result,
+    def __init__(self, pos_inds, neg_inds, bboxes, gt_bboxes, gt_polygons, assign_result,
                  gt_flags):
         self.pos_inds = pos_inds
         self.neg_inds = neg_inds
@@ -14,6 +14,8 @@ class SamplingResult(object):
         self.num_gts = gt_bboxes.shape[0]
         self.pos_assigned_gt_inds = assign_result.gt_inds[pos_inds] - 1
         self.pos_gt_bboxes = gt_bboxes[self.pos_assigned_gt_inds, :]
+        if gt_polygons is not None:
+            self.pos_gt_polygon = gt_polygons[self.pos_assigned_gt_inds, :]
         if assign_result.labels is not None:
             self.pos_gt_labels = assign_result.labels[pos_inds]
         else:

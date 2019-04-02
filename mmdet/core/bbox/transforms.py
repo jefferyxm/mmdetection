@@ -30,6 +30,44 @@ def bbox2delta(proposals, gt, means=[0, 0, 0, 0], stds=[1, 1, 1, 1]):
 
     return deltas
 
+def polygon2delta(proposals, gt, means=[0, 0, 0, 0, 0, 0, 0, 0], 
+                    stds=[1, 1, 1, 1, 1, 1, 1, 1]):
+
+    proposals = proposals.float()
+    gt = gt.float()
+    px1 = proposals[..., 0]
+    px2 = proposals[..., 2]
+    py1 = proposals[..., 1]
+    py2 = proposals[..., 3] 
+    pw = proposals[..., 2] - proposals[..., 0] + 1.0
+    ph = proposals[..., 3] - proposals[..., 1] + 1.0
+
+    gx1 = gt[..., 0]
+    gx2 = gt[..., 2]
+    gx3 = gt[..., 4]
+    gx4 = gt[..., 6]
+
+    gy1 = gt[..., 1]
+    gy2 = gt[..., 3]
+    gy3 = gt[..., 5]
+    gy4 = gt[..., 7]
+
+    dx1 = (gx1 - px1)/pw
+    dy1 = (gy1 - py1)/ph
+    dx2 = (gx2 - px2)/pw
+    dy2 = (gy2 - py1)/ph
+    dx3 = (gx3 - px2)/pw
+    dy3 = (gy3 - py2)/ph
+    dx4 = (gx4 - px1)/pw
+    dy4 = (gy4 - py2)/ph
+
+    deltas = torch.stack([dx1, dy1, dx2, dy2, dx3, dy3, dx4, dy4], dim=-1)
+
+    means = deltas.new_tensor(means).unsqueeze(0)
+    stds = deltas.new_tensor(stds).unsqueeze(0)
+    deltas = deltas.sub_(means).div_(stds)
+    return deltas
+
 
 def delta2bbox(rois,
                deltas,
@@ -66,6 +104,54 @@ def delta2bbox(rois,
         y2 = y2.clamp(min=0, max=max_shape[0] - 1)
     bboxes = torch.stack([x1, y1, x2, y2], dim=-1).view_as(deltas)
     return bboxes
+
+
+def delta2polygon(rois,
+                  deltas,
+                  means=[0, 0, 0, 0, 0, 0, 0, 0],
+                  stds=[1, 1, 1, 1, 1, 1, 1, 1],
+                  max_shape=None):
+    means = deltas.new_tensor(means).repeat(1, deltas.size(1) // 8)
+    stds = deltas.new_tensor(stds).repeat(1, deltas.size(1) // 8)
+    denorm_deltas = deltas * stds + means
+
+    dx1 = denorm_deltas[:, 0::8]
+    dy1 = denorm_deltas[:, 1::8]
+    dx2 = denorm_deltas[:, 2::8]
+    dy2 = denorm_deltas[:, 3::8]
+    dx3 = denorm_deltas[:, 4::8]
+    dy3 = denorm_deltas[:, 5::8]
+    dx4 = denorm_deltas[:, 6::8]
+    dy4 = denorm_deltas[:, 7::8]
+
+    px1 = (rois[:, 0]).unsqueeze(1).expand_as(dx1)
+    px2 = (rois[:, 2]).unsqueeze(1).expand_as(dx1)
+    py1 = (rois[:, 1]).unsqueeze(1).expand_as(dy1)
+    py2 = (rois[:, 3]).unsqueeze(1).expand_as(dy1)
+    pw = (rois[:, 2] - rois[:, 0] + 1.0).unsqueeze(1).expand_as(dx1)
+    ph = (rois[:, 3] - rois[:, 1] + 1.0).unsqueeze(1).expand_as(dy1)
+
+    gx1 = dx1 * pw + px1
+    gy1 = dy1 * ph + py1
+    gx2 = dx2 * pw + px2 
+    gy2 = dy2 * ph + py1
+    gx3 = dx3 * pw + px2
+    gy3 = dy3 * ph + py2
+    gx4 = dx4 * pw + px1
+    gy4 = dy4 * ph + py2
+
+    if max_shape is not None:
+        gx1 = gx1.clamp(min=0, max=max_shape[1] - 1)
+        gy1 = gy1.clamp(min=0, max=max_shape[0] - 1)
+        gx2 = gx2.clamp(min=0, max=max_shape[1] - 1)
+        gy2 = gy2.clamp(min=0, max=max_shape[0] - 1)
+        gx3 = gx3.clamp(min=0, max=max_shape[1] - 1)
+        gy3 = gy3.clamp(min=0, max=max_shape[0] - 1)
+        gx4 = gx4.clamp(min=0, max=max_shape[1] - 1)
+        gy4 = gy4.clamp(min=0, max=max_shape[0] - 1)
+    polygons = torch.stack([gx1, gy1, gx2, gy2, gx3, gy3, gx4, gy4], dim=-1).view_as(deltas)
+    return polygons
+
 
 
 def bbox_flip(bboxes, img_shape):
@@ -148,7 +234,7 @@ def bbox2result(bboxes, labels, num_classes):
     """
     if bboxes.shape[0] == 0:
         return [
-            np.zeros((0, 5), dtype=np.float32) for i in range(num_classes - 1)
+            np.zeros((0, 9), dtype=np.float32) for i in range(num_classes - 1)
         ]
     else:
         bboxes = bboxes.cpu().numpy()

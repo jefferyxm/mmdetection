@@ -198,37 +198,18 @@ class IcdarDistEvalF1Hook(DistEvalHook):
             bbox_result, segm_result = results[idx]
 
             bboxes = np.vstack(bbox_result)
-            if segm_result is not None:
-                pt_dir = self.cfg.work_dir + '/pt/'
-                im_name = self.dataset.img_infos[idx]['filename']
-                if not os.path.exists(pt_dir):
-                    os.makedirs(pt_dir)
-                img_index = im_name.split('_')[1]
-                img_index = img_index.split('.')[0]
-                pt_file = open(pt_dir + 'res_img_' + img_index + '.txt', 'w')
+            for i in inds:
+                # reshape to ori image
+                px = bboxes[i, ::2]
+                py = bboxes[i, 1::2]
+                o_h, o_w, _ = img_meta['ori_shape']
+                px = ((o_w/w)*px).astype(int)
+                py = ((o_h/h)*py).astype(int)
 
-                segms = mmcv.concat_list(segm_result)
-
-                score_thr = self.cfg.test_cfg.rcnn.score_thr
-                inds = np.where(bboxes[:, -1] > score_thr)[0]
-
-                for i in inds:
-                    mask_c = maskUtils.decode(segms[i])
-                    contour, hier = cv2.findContours(
-                        mask_c.copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
-
-                    for c in contour:
-                        c = c.reshape((-1,2))
-                        rotRect = cv2.minAreaRect(c)
-                        minRect = np.int0(cv2.boxPoints(rotRect))
-                        
-                        px = minRect[:,0]
-                        py = minRect[:,1]
-
-                        line = str(px[0]) + ',' + str(py[0]) + ',' + str(px[1]) + ',' + str(py[1]) + ',' + \
-                                str(px[2]) + ',' + str(py[2]) + ',' + str(px[3]) + ',' + str(py[3]) + '\r\n'
-                        pt_file.write(line)
-                pt_file.close()
+                line = str(px[0]) + ',' + str(py[0]) + ',' + str(px[1]) + ',' + str(py[1]) + ',' + \
+                        str(px[2]) + ',' + str(py[2]) + ',' + str(px[3]) + ',' + str(py[3]) + '\r\n'
+                pt_file.write(line)
+            pt_file.close()
         
         # get zip file
         import zipfile
