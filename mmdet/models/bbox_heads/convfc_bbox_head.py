@@ -75,8 +75,12 @@ class ConvFCBBoxHead(BBoxHead):
         if self.with_cls:
             self.fc_cls = nn.Linear(self.cls_last_dim, self.num_classes)
         if self.with_reg:
-            out_dim_reg = (4 if self.reg_class_agnostic else
-                           4 * self.num_classes)
+            if self.reg_type == 'reg_bbox':
+                out_dim_reg = (4 if self.reg_class_agnostic else
+                            4 * self.num_classes)
+            elif self.reg_type == 'reg_polygon':
+                out_dim_reg = (8 if self.reg_class_agnostic else
+                            8 * self.num_classes)
             self.fc_reg = nn.Linear(self.reg_last_dim, out_dim_reg)
 
     def _add_conv_fc_branch(self,

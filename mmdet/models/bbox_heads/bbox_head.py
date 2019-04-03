@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from mmdet.core import (delta2bbox, multiclass_nms, bbox_target,
-                        weighted_cross_entropy, weighted_smoothl1, accuracy)
+from mmdet.core import (delta2bbox, multiclass_nms, bbox_target, delta2polygon, polygon_target,
+                        weighted_cross_entropy, weighted_smoothl1, accuracy, multiclass_polygon_nms)
 from ..registry import HEADS
 
 
@@ -21,7 +21,8 @@ class BBoxHead(nn.Module):
                  num_classes=81,
                  target_means=[0., 0., 0., 0.],
                  target_stds=[0.1, 0.1, 0.2, 0.2],
-                 reg_class_agnostic=False):
+                 reg_class_agnostic=False,
+                 reg_type = 'reg_polygon'):
         super(BBoxHead, self).__init__()
         assert with_cls or with_reg
         self.with_avg_pool = with_avg_pool
@@ -33,6 +34,11 @@ class BBoxHead(nn.Module):
         self.target_means = target_means
         self.target_stds = target_stds
         self.reg_class_agnostic = reg_class_agnostic
+        self.reg_type = reg_type
+
+        if reg_type == 'reg_polygon':
+            self.target_means = [0., 0., 0., 0., 0., 0., 0., 0.]
+            self.target_stds = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
 
         in_channels = self.in_channels
         if self.with_avg_pool:
@@ -42,7 +48,10 @@ class BBoxHead(nn.Module):
         if self.with_cls:
             self.fc_cls = nn.Linear(in_channels, num_classes)
         if self.with_reg:
-            out_dim_reg = 4 if reg_class_agnostic else 4 * num_classes
+            if self.reg_type == 'reg_bbox':
+                out_dim_reg = 4 if reg_class_agnostic else 4 * num_classes
+            elif self.reg_type == 'reg_polygon':
+                out_dim_reg = 8 if reg_class_agnostic else 8 * num_classes
             self.fc_reg = nn.Linear(in_channels, out_dim_reg)
         self.debug_imgs = None
 
@@ -62,23 +71,41 @@ class BBoxHead(nn.Module):
         bbox_pred = self.fc_reg(x) if self.with_reg else None
         return cls_score, bbox_pred
 
-    def get_target(self, sampling_results, gt_bboxes, gt_labels,
+    def get_target(self, sampling_results, gt_bboxes, gt_polygons, gt_labels,
                    rcnn_train_cfg):
-        pos_proposals = [res.pos_bboxes for res in sampling_results]
-        neg_proposals = [res.neg_bboxes for res in sampling_results]
-        pos_gt_bboxes = [res.pos_gt_bboxes for res in sampling_results]
-        pos_gt_labels = [res.pos_gt_labels for res in sampling_results]
-        reg_classes = 1 if self.reg_class_agnostic else self.num_classes
-        cls_reg_targets = bbox_target(
-            pos_proposals,
-            neg_proposals,
-            pos_gt_bboxes,
-            pos_gt_labels,
-            rcnn_train_cfg,
-            reg_classes,
-            target_means=self.target_means,
-            target_stds=self.target_stds)
-        return cls_reg_targets
+        if self.reg_type == 'reg_bbox':
+            pos_proposals = [res.pos_bboxes for res in sampling_results]
+            neg_proposals = [res.neg_bboxes for res in sampling_results]
+            pos_gt_bboxes = [res.pos_gt_bboxes for res in sampling_results]
+            pos_gt_labels = [res.pos_gt_labels for res in sampling_results]
+            reg_classes = 1 if self.reg_class_agnostic else self.num_classes
+            cls_reg_targets = bbox_target(
+                pos_proposals,
+                neg_proposals,
+                pos_gt_bboxes,
+                pos_gt_labels,
+                rcnn_train_cfg,
+                reg_classes,
+                target_means=self.target_means,
+                target_stds=self.target_stds)
+            return cls_reg_targets
+
+        elif self.reg_type == 'reg_polygon':
+            pos_proposals = [res.pos_bboxes for res in sampling_results]
+            neg_proposals = [res.neg_bboxes for res in sampling_results]
+            pos_gt_polygon = [res.pos_gt_polygon for res in sampling_results]
+            pos_gt_labels = [res.pos_gt_labels for res in sampling_results]
+            reg_classes = 1 if self.reg_class_agnostic else self.num_classes
+            cls_reg_targets = polygon_target(
+                pos_proposals,
+                neg_proposals,
+                pos_gt_polygon,
+                pos_gt_labels,
+                rcnn_train_cfg,
+                reg_classes,
+                target_means=self.target_means,
+                target_stds=self.target_stds)
+            return cls_reg_targets
 
     def loss(self,
              cls_score,
@@ -93,6 +120,7 @@ class BBoxHead(nn.Module):
             losses['loss_cls'] = weighted_cross_entropy(
                 cls_score, labels, label_weights, reduce=reduce)
             losses['acc'] = accuracy(cls_score, labels)
+
         if bbox_pred is not None:
             losses['loss_reg'] = weighted_smoothl1(
                 bbox_pred,
@@ -113,23 +141,43 @@ class BBoxHead(nn.Module):
             cls_score = sum(cls_score) / float(len(cls_score))
         scores = F.softmax(cls_score, dim=1) if cls_score is not None else None
 
-        if bbox_pred is not None:
-            bboxes = delta2bbox(rois[:, 1:], bbox_pred, self.target_means,
-                                self.target_stds, img_shape)
-        else:
-            bboxes = rois[:, 1:]
-            # TODO: add clip here
+        if self.reg_type == 'reg_bbox':
+            if bbox_pred is not None:
+                bboxes = delta2bbox(rois[:, 1:], bbox_pred, self.target_means,
+                                    self.target_stds, img_shape)
+            else:
+                bboxes = rois[:, 1:]
+                # TODO: add clip here
 
-        if rescale:
-            bboxes /= scale_factor
+            if rescale:
+                bboxes /= scale_factor
 
-        if cfg is None:
-            return bboxes, scores
-        else:
-            det_bboxes, det_labels = multiclass_nms(
-                bboxes, scores, cfg.score_thr, cfg.nms, cfg.max_per_img)
+            if cfg is None:
+                return bboxes, scores
+            else:
+                det_bboxes, det_labels = multiclass_nms(
+                    bboxes, scores, cfg.score_thr, cfg.nms, cfg.max_per_img)
 
-            return det_bboxes, det_labels
+                return det_bboxes, det_labels
+        elif self.reg_type == 'reg_polygon':
+            if bbox_pred is not None:
+                polygon = delta2polygon(rois[:, 1:], bbox_pred, self.target_means,
+                                    self.target_stds, img_shape)
+            else:
+                polygon = rois[:, 1:]
+                # TODO: add clip here
+
+            if rescale:
+                polygon /= scale_factor
+
+            if cfg is None:
+                return polygon, scores
+            else:
+                det_polygon, det_labels = multiclass_polygon_nms(
+                            polygon, scores, cfg.score_thr, cfg.nms, cfg.max_per_img)
+
+                return det_polygon, det_labels
+            
 
     def refine_bboxes(self, rois, labels, bbox_preds, pos_is_gts, img_metas):
         """Refine bboxes during training.
