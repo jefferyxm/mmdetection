@@ -97,6 +97,7 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
                       img,
                       img_meta,
                       gt_bboxes,
+                      gt_polygons,
                       gt_labels,
                       gt_bboxes_ignore=None,
                       gt_masks=None,
@@ -142,6 +143,7 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
                     assign_result,
                     proposal_list[i],
                     gt_bboxes[i],
+                    gt_polygons[i],
                     gt_labels[i],
                     feats=[lvl_feat[i][None] for lvl_feat in x])
                 sampling_results.append(sampling_result)
@@ -155,7 +157,7 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
             cls_score, bbox_pred = self.bbox_head(bbox_feats)
 
             bbox_targets = self.bbox_head.get_target(
-                sampling_results, gt_bboxes, gt_labels, self.train_cfg.rcnn)
+                sampling_results, gt_bboxes, gt_polygons, gt_labels, self.train_cfg.rcnn)
             loss_bbox = self.bbox_head.loss(cls_score, bbox_pred,
                                             *bbox_targets)
             losses.update(loss_bbox)

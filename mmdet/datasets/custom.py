@@ -186,9 +186,11 @@ class CustomDataset(Dataset):
 
         ann = self.get_ann_info(idx)
         gt_bboxes = ann['bboxes']
+        gt_polygons = ann['polygons']
         gt_labels = ann['labels']
         if self.with_crowd:
             gt_bboxes_ignore = ann['bboxes_ignore']
+            gt_polygons_ignore = ann['polygons_ignore']
 
         # skip the image if there is no valid gt bbox
         if len(gt_bboxes) == 0:
@@ -196,8 +198,8 @@ class CustomDataset(Dataset):
 
         # extra augmentation
         if self.extra_aug is not None:
-            img, gt_bboxes, gt_labels = self.extra_aug(img, gt_bboxes,
-                                                       gt_labels)
+            img, gt_bboxes, gt_polygons, gt_labels = self.extra_aug(img, gt_bboxes, 
+                                                       gt_polygons, gt_labels)
 
         # apply transforms
         flip = True if np.random.rand() < self.flip_ratio else False
@@ -211,11 +213,11 @@ class CustomDataset(Dataset):
                                             flip)
             proposals = np.hstack(
                 [proposals, scores]) if scores is not None else proposals
-        gt_bboxes = self.bbox_transform(gt_bboxes, img_shape, scale_factor,
+        gt_bboxes, gt_polygons = self.bbox_transform(gt_bboxes, gt_polygons, img_shape, scale_factor,
                                         flip)
         if self.with_crowd:
-            gt_bboxes_ignore = self.bbox_transform(gt_bboxes_ignore, img_shape,
-                                                   scale_factor, flip)
+            gt_bboxes_ignore, gt_polygons_ignore = self.bbox_transform(gt_bboxes_ignore, gt_polygons_ignore, 
+                                                img_shape, scale_factor, flip)
         if self.with_mask:
             gt_masks = self.mask_transform(ann['masks'], pad_shape,
                                            scale_factor, flip)
@@ -232,7 +234,8 @@ class CustomDataset(Dataset):
         data = dict(
             img=DC(to_tensor(img), stack=True),
             img_meta=DC(img_meta, cpu_only=True),
-            gt_bboxes=DC(to_tensor(gt_bboxes)))
+            gt_bboxes=DC(to_tensor(gt_bboxes)),
+            gt_polygons = DC(to_tensor(gt_polygons)))   
         if self.proposals is not None:
             data['proposals'] = DC(to_tensor(proposals))
         if self.with_label:
@@ -273,6 +276,7 @@ class CustomDataset(Dataset):
                     proposal = proposal[:, :4]
                 else:
                     score = None
+                print('::::::::::::::::::---------')
                 _proposal = self.bbox_transform(proposal, img_shape,
                                                 scale_factor, flip)
                 _proposal = np.hstack(

@@ -1,6 +1,6 @@
 # model settings
 model = dict(
-    type='MaskRCNN',
+    type='FasterRCNN',
     pretrained='modelzoo://resnet50',
     backbone=dict(
         type='ResNet',
@@ -38,18 +38,7 @@ model = dict(
         num_classes=2,
         target_means=[0., 0., 0., 0.],
         target_stds=[0.1, 0.1, 0.2, 0.2],
-        reg_class_agnostic=False),
-    mask_roi_extractor=dict(
-        type='SingleRoIExtractor',
-        roi_layer=dict(type='RoIAlign', out_size=14, sample_num=2),
-        out_channels=64,
-        featmap_strides=[4, 8, 16, 32]),
-    mask_head=dict(
-        type='FCNMaskHead',
-        num_convs=4,
-        in_channels=64,
-        conv_out_channels=64,
-        num_classes=2))
+        reg_class_agnostic=False))
 # model training and testing settings
 train_cfg = dict(
     rpn=dict(
@@ -149,7 +138,7 @@ lr_config = dict(
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
     step=[60, 80])
-checkpoint_config = dict(interval=20)
+checkpoint_config = dict(interval=10)
 # yapf:disable
 log_config = dict(
     interval=50,

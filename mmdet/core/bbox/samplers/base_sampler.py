@@ -32,6 +32,7 @@ class BaseSampler(metaclass=ABCMeta):
                assign_result,
                bboxes,
                gt_bboxes,
+               gt_polygons=None,
                gt_labels=None,
                **kwargs):
         """Sample positive and negative bboxes.
@@ -74,5 +75,5 @@ class BaseSampler(metaclass=ABCMeta):
             assign_result, num_expected_neg, bboxes=bboxes, **kwargs)
         neg_inds = neg_inds.unique()
 
-        return SamplingResult(pos_inds, neg_inds, bboxes, gt_bboxes,
+        return SamplingResult(pos_inds, neg_inds, bboxes, gt_bboxes, gt_polygons, 
                               assign_result, gt_flags)

@@ -65,8 +65,10 @@ class CocoDataset(CustomDataset):
                 labels, masks, mask_polys, poly_lens.
         """
         gt_bboxes = []
+        gt_polygons = []
         gt_labels = []
         gt_bboxes_ignore = []
+        gt_polygons_ignore = []
         # Two formats are provided.
         # 1. mask: a binary map of the same size of the image.
         # 2. polys: each mask consists of one or several polys, each poly is a
@@ -84,8 +86,10 @@ class CocoDataset(CustomDataset):
             bbox = [x1, y1, x1 + w - 1, y1 + h - 1]
             if ann['iscrowd']:
                 gt_bboxes_ignore.append(bbox)
+                gt_polygons_ignore.append(ann['segmentation'][0])
             else:
                 gt_bboxes.append(bbox)
+                gt_polygons.append(ann['segmentation'][0])
                 gt_labels.append(self.cat2label[ann['category_id']])
             if with_mask:
                 gt_masks.append(self.coco.annToMask(ann))
@@ -98,17 +102,22 @@ class CocoDataset(CustomDataset):
         if gt_bboxes:
             gt_bboxes = np.array(gt_bboxes, dtype=np.float32)
             gt_labels = np.array(gt_labels, dtype=np.int64)
+            gt_polygons = np.array(gt_polygons, dtype=np.float32)
         else:
             gt_bboxes = np.zeros((0, 4), dtype=np.float32)
             gt_labels = np.array([], dtype=np.int64)
+            gt_polygons = np.zeros((0, 8), dtype=np.float32)
 
         if gt_bboxes_ignore:
             gt_bboxes_ignore = np.array(gt_bboxes_ignore, dtype=np.float32)
+            gt_polygons_ignore = np.array(gt_polygons_ignore, dtype=np.float32)
         else:
             gt_bboxes_ignore = np.zeros((0, 4), dtype=np.float32)
+            gt_polygons_ignore = np.zeros((0, 8), dtype=np.float32)
 
         ann = dict(
-            bboxes=gt_bboxes, labels=gt_labels, bboxes_ignore=gt_bboxes_ignore)
+            bboxes=gt_bboxes, polygons=gt_polygons, labels=gt_labels, 
+            bboxes_ignore=gt_bboxes_ignore, polygons_ignore = gt_polygons_ignore)
 
         if with_mask:
             ann['masks'] = gt_masks
