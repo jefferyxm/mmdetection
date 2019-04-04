@@ -93,13 +93,14 @@ data_root = 'data/icdar2015/'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 data = dict(
-    imgs_per_gpu=2,
+    imgs_per_gpu=1,
     workers_per_gpu=2,
     train=dict(
         type=dataset_type,
-        ann_file=data_root + 'annotations/anno_train_icdar15.json',
+        ann_file=data_root + 'annotations/train.json',
         img_prefix=data_root + 'train/',
-        img_scale=[(1333, 800),(1222, 700),(1000, 600),(1444, 900),(1555, 1000)],
+        # img_scale=[(1333, 800),(1222, 700),(1000, 600),(1444, 900),(1555, 1000)],
+        img_scale = [(1138, 640), (1423, 800), (1706, 960), (1990, 1120)],
         img_norm_cfg=img_norm_cfg,
         size_divisor=32,
         flip_ratio=0.5,
@@ -108,9 +109,9 @@ data = dict(
         with_label=True),
     val=dict(
         type=dataset_type,
-        ann_file=data_root + 'annotations/anno_test_icdar15.json',
+        ann_file=data_root + 'annotations/test.json',
         img_prefix=data_root + 'test/',
-        img_scale=(1333, 800),
+        img_scale=(1706, 960),
         img_norm_cfg=img_norm_cfg,
         size_divisor=32,
         flip_ratio=0,
@@ -119,9 +120,9 @@ data = dict(
         with_label=True),
     test=dict(
         type=dataset_type,
-        ann_file=data_root + 'annotations/anno_test_icdar15.json',
+        ann_file=data_root + 'annotations/test.json',
         img_prefix=data_root + 'test/',
-        img_scale=(1333, 800),
+        img_scale=(1706, 960),
         img_norm_cfg=img_norm_cfg,
         size_divisor=32,
         flip_ratio=0,
@@ -129,7 +130,7 @@ data = dict(
         with_label=False,
         test_mode=True))
 # optimizer
-optimizer = dict(type='SGD', lr=0.002, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='SGD', lr=0.001, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # learning policy
 lr_config = dict(
@@ -137,7 +138,7 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[60, 80])
+    step=[30, 50, 60])
 checkpoint_config = dict(interval=10)
 # yapf:disable
 log_config = dict(
