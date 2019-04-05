@@ -89,7 +89,7 @@ test_cfg = dict(
         mask_thr_binary=0.5))
 # dataset settings
 dataset_type = 'CocoDataset'
-data_root = 'data/icdar2015/'
+data_root = 'data/MSRA-TD500/'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 data = dict(
@@ -152,7 +152,7 @@ log_config = dict(
 total_epochs = 60
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = './work_dirs/ic15-0303'
+work_dir = './work_dirs/msra-0303-zhou'
 load_from = None
 resume_from = None
 # resume_from = work_dir + '/epoch_80.pth'

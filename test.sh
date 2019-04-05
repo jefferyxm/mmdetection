@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 python setup.py install
-python tools/test.py  configs/maskr50.py work_dirs/mask_rcnn_r50_fpn_1x-arpn2/epoch_80.pth --show
+python tools/test.py  configs/maskr50.py work_dirs/ic15-0303-zhou/epoch_60.pth --show
