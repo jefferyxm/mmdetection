@@ -97,6 +97,10 @@ def multiclass_polygon_nms(multi_polygons, multi_scores, score_thr, nms_cfg, max
         # apply nms
 
         nms_th = nms_cfg_.iou_thr
+        keep = ploygon_filter(_polygons)
+        _polygons = _polygons[keep]
+        _scores = _scores[keep]
+        
         keep = polygon_nms(_polygons, _scores, nms_th)
         _polygons = _polygons[keep]
         _scores = _scores[keep]
@@ -154,4 +158,54 @@ def polygon_nms(polygons, scores, thresh):
         inds = np.where(ovr <= thresh)[0]
         order = order[inds + 1]
         
+    return keep
+
+
+def ploygon_filter(polygons):
+    polygons = polygons.cpu().numpy()
+    num_polys = polygons.shape[0]
+    pts = polygons.reshape((num_polys, -1, 2))
+
+    ZERO = 1e-9
+    class Point(object):
+
+        def __init__(self, x, y):
+            self.x, self.y = x, y
+
+    class Vector(object):
+
+        def __init__(self, start_point, end_point):
+            self.start, self.end = start_point, end_point
+            self.x = end_point.x - start_point.x
+            self.y = end_point.y - start_point.y
+
+    def negative(vector):
+        return Vector(vector.end, vector.start)
+
+    def vector_product(vectorA, vectorB):
+        return vectorA.x * vectorB.y - vectorB.x * vectorA.y
+
+    def is_intersected(A, B, C, D):
+        AC = Vector(A, C)
+        AD = Vector(A, D)
+        BC = Vector(B, C)
+        BD = Vector(B, D)
+        CA = negative(AC)
+        CB = negative(BC)
+        DA = negative(AD)
+        DB = negative(BD)
+        
+        return (vector_product(AC, AD) * vector_product(BC, BD) > ZERO) \
+            & (vector_product(CA, CB) * vector_product(DA, DB) > ZERO)
+
+    a = Point(pts[:, 0, 0], pts[:, 0, 1])
+    b = Point(pts[:, 1, 0], pts[:, 1, 1])
+    c = Point(pts[:, 2, 0], pts[:, 2, 1])
+    d = Point(pts[:, 3, 0], pts[:, 3, 1])
+
+    # 1 judge ab cd 
+    ab_cd = is_intersected(a, b, c, d)
+    # 2 judge ad bc
+    ad_bc = is_intersected(a, d, b, c)
+    keep = np.where(ab_cd & ad_bc)[0]
     return keep
