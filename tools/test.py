@@ -55,6 +55,7 @@ def parse_args():
         choices=['proposal', 'proposal_fast', 'bbox', 'segm', 'keypoints'],
         help='eval types')
     parser.add_argument('--show', action='store_true', help='show results')
+    parser.add_argument('--dataset', type=str, choices=['icdar2015','icdar2013','TD500'])
     args = parser.parse_args()
     return args
 
@@ -115,7 +116,12 @@ def main():
     z.close()
 
     #3 use icdar eval
-    gt_zip_dir = './work_dirs/gt.zip'
+    if args.dataset=='icdar2015':
+        gt_zip_dir = './work_dirs/gt_ic15.zip'
+    elif args.dataset=='icdar2013':
+        gt_zip_dir = './work_dirs/gt_ic13.zip'
+    elif args.dataset=='td500':
+        gt_zip_dir = './work_dirs/gt_td500.zip'
     param_dict = dict(
         # gt zip file path
         g = gt_zip_dir,
@@ -123,15 +129,10 @@ def main():
         s = pt_zip_dir,
     )
     result_dict = icdar_eval(param_dict)
-    # runner.log_buffer.output['P'] = result_dict['precision']
-    # runner.log_buffer.output['R'] = result_dict['recall']
-    # runner.log_buffer.output['F1'] = result_dict['hmean']
-    # runner.log_buffer.ready = True
     
     print(result_dict)
     for i in range(6):
         print('')
-
 
     if args.out:
         print('writing results to {}'.format(args.out))

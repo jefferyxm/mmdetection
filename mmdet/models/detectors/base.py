@@ -117,7 +117,7 @@ class BaseDetector(nn.Module):
             # draw segmentation masks
 
             gen_res_file = True
-            pt_dir = '../output/'
+            pt_dir = '../output/pt/'
             im_name = img_meta['imname']
             if not os.path.exists(pt_dir):
                 os.makedirs(pt_dir)
