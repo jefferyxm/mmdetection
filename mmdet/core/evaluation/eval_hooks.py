@@ -21,7 +21,7 @@ import cv2
 
 class DistEvalHook(Hook):
 
-    def __init__(self, dataset, interval=1, cfg=None):
+    def __init__(self, dataset, interval=10, cfg=None):
         if isinstance(dataset, Dataset):
             self.dataset = dataset
         elif isinstance(dataset, dict):
@@ -34,6 +34,7 @@ class DistEvalHook(Hook):
         self.interval = interval
         self.lock_dir = None
         self.cfg = cfg
+        self.dataset_name = dataset['img_prefix'].split('/')[1]
 
     def _barrier(self, rank, world_size):
         """Due to some issues with `torch.distributed.barrier()`, we have to
@@ -231,7 +232,12 @@ class IcdarDistEvalF1Hook(DistEvalHook):
         z.close()
 
         #3 use icdar eval
-        gt_zip_dir = './work_dirs/gt.zip'
+        if self.dataset_name == 'icdar2015':
+            gt_zip_dir = './work_dirs/gt_ic15.zip'
+        elif self.dataset_name == 'icdar2013':
+            gt_zip_dir = './work_dirs/gt_ic13.zip'
+        elif self.dataset_name == 'MSRA-TD500':
+            gt_zip_dir = './work_dirs/gt_td500.zip'
         param_dict = dict(
             # gt zip file path
             g = gt_zip_dir,
