@@ -55,7 +55,7 @@ def parse_args():
         choices=['proposal', 'proposal_fast', 'bbox', 'segm', 'keypoints'],
         help='eval types')
     parser.add_argument('--show', action='store_true', help='show results')
-    parser.add_argument('--dataset', type=str, choices=['icdar2015','icdar2013','TD500'])
+    parser.add_argument('--dataset', type=str, choices=['icdar2015','icdar2013','TD500', 'td900'])
     args = parser.parse_args()
     return args
 
@@ -120,7 +120,7 @@ def main():
         gt_zip_dir = './work_dirs/gt_ic15.zip'
     elif args.dataset=='icdar2013':
         gt_zip_dir = './work_dirs/gt_ic13.zip'
-    elif args.dataset=='td500':
+    elif (args.dataset=='td500') or (args.dataset == 'td900'):
         gt_zip_dir = './work_dirs/gt_td500.zip'
     param_dict = dict(
         # gt zip file path
