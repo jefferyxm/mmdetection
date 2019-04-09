@@ -35,7 +35,7 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
         if rpn_head is not None:
             self.rpn_head = builder.build_head(rpn_head)
 
-        self.with_deform_adjust = 1
+        self.with_deform_adjust = 0
         if self.with_deform_adjust:
             self.deform_adjust = ARPNDeformFeature(
                 neck.out_channels,

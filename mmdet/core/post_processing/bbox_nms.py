@@ -103,6 +103,10 @@ def multiclass_polygon_nms(multi_polygons, multi_scores, score_thr, nms_cfg, max
         
         keep = polygon_nms(_polygons, _scores, nms_th)
         _polygons = _polygons[keep]
+
+        # set _polygons as clockwise
+        _polygons = _clock_wise(_polygons)
+
         _scores = _scores[keep]
         cls_dets = torch.cat([_polygons, _scores[:, None]], dim=1)
 
@@ -209,3 +213,19 @@ def ploygon_filter(polygons):
     ad_bc = is_intersected(a, d, b, c)
     keep = np.where(ab_cd & ad_bc)[0]
     return keep
+
+
+def _clock_wise(polygons):
+    polygons = polygons.cpu().numpy()
+    clock_polygons=np.zeros(polygons.shape, dtype=np.float32)
+    for idx, polygon in enumerate(polygons):
+        a = polygon[::2]
+        b = polygon[1::2]
+        sum=a[0]*b[1] + a[1]*b[2]+a[2]*b[3]+a[3]*b[0] - a[1]*b[0] - a[2]*b[1] - a[3]*b[2] -a[0]*b[3]
+        is_counter = True if sum >0 else False
+        if is_counter:
+            clock_polygons[idx] = polygon
+        else:
+            polygon = ((polygon.reshape(4,2))[::-1]).reshape(8)
+            clock_polygons[idx] = polygon
+    return torch.from_numpy(clock_polygons).to('cuda')
