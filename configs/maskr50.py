@@ -89,7 +89,7 @@ test_cfg = dict(
         mask_thr_binary=0.5))
 # dataset settings
 dataset_type = 'CocoDataset'
-data_root = 'data/MSRA-TD500/'
+data_root = 'data/mix-td900/'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 data = dict(
@@ -100,10 +100,10 @@ data = dict(
         ann_file=data_root + 'annotations/train.json',
         img_prefix=data_root + 'train/',
         # img_scale=[(1333, 800),(1222, 700),(1000, 600),(1444, 900),(1555, 1000)],
-        img_scale = [(1138, 640), (1423, 800), (1706, 960), (1990, 1120)],
+        img_scale = [(854, 480), (1138, 640), (1423, 800), (1706, 960), (1990, 1120)],
         img_norm_cfg=img_norm_cfg,
         size_divisor=32,
-        flip_ratio=0.5,
+        flip_ratio=0,
         with_mask=True,
         with_crowd=True,
         with_label=True),
@@ -111,7 +111,7 @@ data = dict(
         type=dataset_type,
         ann_file=data_root + 'annotations/test.json',
         img_prefix=data_root + 'test/',
-        img_scale=(1706, 960),
+        img_scale=(1423, 800),
         img_norm_cfg=img_norm_cfg,
         size_divisor=32,
         flip_ratio=0,
@@ -122,7 +122,7 @@ data = dict(
         type=dataset_type,
         ann_file=data_root + 'annotations/test.json',
         img_prefix=data_root + 'test/',
-        img_scale=(1706, 960),
+        img_scale=(1423, 800),
         img_norm_cfg=img_norm_cfg,
         size_divisor=32,
         flip_ratio=0,
@@ -138,22 +138,22 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[30, 50, 60])
+    step=[70, 110, 120])
 checkpoint_config = dict(interval=10)
 # yapf:disable
 log_config = dict(
     interval=50,
     hooks=[
         dict(type='TextLoggerHook'),
-        # dict(type='TensorboardLoggerHook')
+        dict(type='TensorboardLoggerHook')
     ])
 # yapf:enable
 # runtime settings
-total_epochs = 60
+total_epochs = 120
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = './work_dirs/msra-0303-zhou'
+work_dir = './work_dirs/mix-0303-zhou'
 load_from = None
-resume_from = None
-# resume_from = work_dir + '/epoch_80.pth'
+# resume_from = None
+resume_from = work_dir + '/epoch_10.pth'
 workflow = [('train', 1)]

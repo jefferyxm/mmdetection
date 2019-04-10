@@ -194,12 +194,16 @@ best_hmean = 0
 class IcdarDistEvalF1Hook(DistEvalHook):
     def evaluate(self, runner, results):
         #1 get result file
+        pt_dir = self.cfg.work_dir + '/pt/'
+        if os.path.exists(pt_dir):
+            import shutil
+            shutil.rmtree(pt_dir)
+
         for idx in range(len(self.dataset)):
             img_id = self.dataset.img_ids[idx]
             bbox_result = results[idx]
             bboxes = np.vstack(bbox_result)
 
-            pt_dir = self.cfg.work_dir + '/pt/'
             im_name = self.dataset.img_infos[idx]['filename']
             if not os.path.exists(pt_dir):
                 os.makedirs(pt_dir)
@@ -236,7 +240,7 @@ class IcdarDistEvalF1Hook(DistEvalHook):
             gt_zip_dir = './work_dirs/gt_ic15.zip'
         elif self.dataset_name == 'icdar2013':
             gt_zip_dir = './work_dirs/gt_ic13.zip'
-        elif self.dataset_name == 'MSRA-TD500':
+        elif (self.dataset_name == 'MSRA-TD500') or (self.dataset_name == 'mix-td900'):
             gt_zip_dir = './work_dirs/gt_td500.zip'
         param_dict = dict(
             # gt zip file path

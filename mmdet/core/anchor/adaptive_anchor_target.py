@@ -60,15 +60,43 @@ def adaptive_anchor_target(anchor_points_list,
             this_level_wh = np.zeros((this_level_ap.shape[0], 2), dtype=np.float32)
             this_level_box_delta = np.zeros((this_level_ap.shape[0], 4),dtype=np.float32)
             if gt_rois.shape[0] > 0:
+                # divide the gt by the gts' area
                 norm = norm_list[i]
-                gt_areas = (gt_rois[:, 2] - gt_rois[:, 0] + 1)*(gt_rois[:, 3]-gt_rois[:, 1] + 1)/(norm*norm)
+                # gt_areas = (gt_rois[:, 2] - gt_rois[:, 0] + 1)*(gt_rois[:, 3]-gt_rois[:, 1] + 1)/(norm*norm)
+                # if i == 0:
+                #     valid_gtidx = np.where(gt_areas <= 2.0)[0]
+                # elif i == len(num_level_ap) - 1:
+                #     valid_gtidx = np.where(gt_areas >= 0.5)[0]
+                # else:
+                #     valid_gtidx = np.where((gt_areas <= 2.0) & (gt_areas >= 0.5))[0]
+                # valid_gts = gt_rois[valid_gtidx, :]
+
+                # divid the gt by the short edge of the gt
+                gt_wh = np.array([(gt_rois[:, 2] - gt_rois[:, 0] + 1), (gt_rois[:, 3]-gt_rois[:, 1] + 1)])
+                gt_short = np.min(gt_wh, axis=0)/norm
+
                 if i == 0:
-                    valid_gtidx = np.where(gt_areas <= 2.0)[0]
+                    valid_gtidx = np.where(gt_short <= 1.0)[0]
                 elif i == len(num_level_ap) - 1:
-                    valid_gtidx = np.where(gt_areas >= 0.5)[0]
+                    valid_gtidx = np.where(gt_short >= 0.5)[0]
                 else:
-                    valid_gtidx = np.where((gt_areas <= 2.0) & (gt_areas >= 0.5))[0]
+                    valid_gtidx = np.where((gt_short <= 1.0) & (gt_short >= 0.5))[0]
                 valid_gts = gt_rois[valid_gtidx, :]
+                
+                # set the nearest position to be positive 
+                #  not implement
+                for gt in valid_gts:
+                    center = np.array([(gt[0]+gt[2])/2 , (gt[1]+gt[3])/2])
+                    dis = np.sum(abs(center - this_level_ap), axis=1)
+                    ner_idx = np.where(dis == np.min(dis))[0]
+                    
+                    this_level_label[ner_idx] = 1
+                    this_level_label_weight[ner_idx] = 1
+                    
+                    ap = this_level_ap[ner_idx][0]
+                    w_best = max(abs(ap[0] - gt[0]) , abs(ap[0] - gt[2]))*2
+                    h_best = max(abs(ap[1] - gt[1]) , abs(ap[1] - gt[3]))*2
+                    this_level_wh[ner_idx] = [w_best/norm, h_best/norm]
 
                 valid_apidx = np.empty(0, dtype=np.int32)
                 for gt in valid_gts:
@@ -101,7 +129,7 @@ def adaptive_anchor_target(anchor_points_list,
                     # 2 add a small value to prevent D & C to be zero 
                     tmp_aps[np.where( (tmp_aps[:,0] <= gt[0]) | (tmp_aps[:,1] <= gt[1]) )[0] ] = gt[0:2] + 0.001
                     transfm_aps[:, :, idx] = tmp_aps.transpose(1,0)
-                
+
                 A = np.zeros((m, n), dtype = np.float32)
                 A[:] = (valid_gts[:,2] - valid_gts[:, 0] + 1)*(valid_gts[:,3] - valid_gts[:, 1] + 1)
                 C = ( transfm_aps[0] - (np.tile(valid_gts[:,0], [m, 1])) ) * 0.5
@@ -175,8 +203,7 @@ def adaptive_anchor_target(anchor_points_list,
                     import matplotlib.pyplot as plt
                     import cv2
 
-
-                    img_root = 'data/icdar2015/train/'
+                    img_root = 'data/mix-td900/train/'
                     
                     im = cv2.imread(img_root + img_metas[0]['imname'])
                     im = cv2.resize(im, (0,0), fx=img_metas[0]['scale_factor'], fy=img_metas[0]['scale_factor'])
@@ -186,8 +213,6 @@ def adaptive_anchor_target(anchor_points_list,
                     plt.imshow(im_plt)
 
                     tg_index = np.where(this_level_label==1)[0]
-                    print(len(tg_index))
-
                     for tg in tg_index:
                         w = np.exp(this_level_wh[tg][0])*norm
                         h = np.exp(this_level_wh[tg][1])*norm
@@ -199,9 +224,6 @@ def adaptive_anchor_target(anchor_points_list,
                         plt.gca().add_patch(plt.Rectangle((gt[0], gt[1]), gt[2]-gt[0], gt[3]-gt[1] ,fill=False, edgecolor='g', linewidth=1))
 
                     plt.show()
-            
-            # set the nearest position to be positive 
-            #  not implement
 
             # save labels into list
             labels.append(this_level_label)
