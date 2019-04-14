@@ -40,7 +40,7 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
         if self.with_attention:
             self.add_attention = AddAttention(neck.out_channels, neck.num_outs)
 
-        self.with_deform_adjust = 0
+        self.with_deform_adjust = 1
         if self.with_deform_adjust:
             self.deform_adjust = ARPNDeformFeature(
                 neck.out_channels,
