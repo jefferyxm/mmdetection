@@ -110,9 +110,7 @@ data
 .vscode
 .idea
 work_dirs
-/compile.sh
-/test.sh
-/train.sh
-/tools/dist_train.sh
+
 
 demo/
+tmp
